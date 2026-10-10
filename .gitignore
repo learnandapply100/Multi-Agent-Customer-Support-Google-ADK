@@ -1,0 +1,19 @@
+# .gitignore
+.env
+runs/
+reports/
+__pycache__/
+.venv/
+
+AGENTS.md
+BUILD_LOG.template.md
+CLAUDE.md
+DESIGN.md
+EVALS.md
+Mem0 API Key
+PRD.md
+SPEC.md
+README.md
+SUBMISSION.md
+TECHNICAL.md
+THRESHOLDS.md

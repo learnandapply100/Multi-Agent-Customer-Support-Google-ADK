@@ -1,0 +1,136 @@
+# mcp_toolbox/tools.yaml
+# The only way the agent touches the database (M-2). Ownership lives in the SQL (M-4).
+# Format: current Toolbox style, one YAML document per item, separated by '---'.
+
+kind: source
+name: shop-db
+type: postgres
+host: 127.0.0.1
+port: 5432
+database: online_shop
+user: toolbox_user
+password: ${DB_PASSWORD}      # read from the environment, never written here
+---
+# Second source, used ONLY by the login check. login_user can read the users table and
+# nothing else, so toolbox_user (the agent's path) still cannot see passwords.
+kind: source
+name: login-db
+type: postgres
+host: 127.0.0.1
+port: 5432
+database: online_shop
+user: login_user
+password: ${LOGIN_DB_PASSWORD}   # read from the environment, never written here
+---
+kind: tool
+name: get-order-status
+type: postgres-sql
+source: shop-db
+description: |
+  Look up ONE order by its order number. Returns the order's status, date, total,
+  items and delivery address. Only returns the order if it belongs to the customer
+  (matched by customer_email). If nothing is returned, the order does not exist
+  on this customer's account. Never guess an order number.
+statement: |
+  SELECT order_id, status, order_date, total_amount, items, delivery_address, customer_email
+  FROM customer_orders
+  WHERE order_id = $1 AND customer_email = $2
+parameters:
+  - name: order_id
+    type: integer
+    description: The order number, for example 3.
+  - name: customer_email
+    type: string
+    description: The logged-in customer's email. Supplied by the system, not the user.
+---
+kind: tool
+name: find-customer-orders
+type: postgres-sql
+source: shop-db
+description: |
+  List ALL of a customer's orders, newest first. Use this for questions like
+  "where is my last order", "show me my orders", or when the customer names a
+  product instead of an order number.
+statement: |
+  SELECT order_id, status, order_date, total_amount, items, delivery_address, customer_email
+  FROM customer_orders
+  WHERE customer_email = $1
+  ORDER BY order_date DESC
+parameters:
+  - name: customer_email
+    type: string
+    description: The logged-in customer's email. Supplied by the system, not the user.
+---
+kind: tool
+name: action-log
+type: postgres-sql
+source: shop-db
+description: |
+  Record a change the customer has asked for (cancel, return, new address, ...).
+  This does NOT change the order; a person or later system acts on the log.
+  action_type must be exactly one of: CANCEL_ORDER, RETURN_ORDER, UPDATE_ADDRESS,
+  UPDATE_PREFERENCE, UPDATE_PROFILE.
+  parameters is a JSON object as a string, e.g. {"order_id": 4, "reason": "found cheaper"}.
+  Include order_id whenever an order is involved. The call is rejected (no row is
+  written) if the order does not belong to the customer.
+statement: |
+  INSERT INTO actions_log (user_email, action_type, parameters)
+  SELECT $1::text, $2::text, $3::jsonb
+  WHERE ($3::jsonb ->> 'order_id') IS NULL
+     OR EXISTS (
+          SELECT 1 FROM customer_orders
+          WHERE order_id = ($3::jsonb ->> 'order_id')::int
+            AND customer_email = $1::text
+        )
+  RETURNING id, action_type
+parameters:
+  - name: user_email
+    type: string
+    description: The logged-in customer's email. Supplied by the system, not the user.
+  - name: action_type
+    type: string
+    description: One of CANCEL_ORDER, RETURN_ORDER, UPDATE_ADDRESS, UPDATE_PREFERENCE, UPDATE_PROFILE.
+    allowedValues:
+      - CANCEL_ORDER
+      - RETURN_ORDER
+      - UPDATE_ADDRESS
+      - UPDATE_PREFERENCE
+      - UPDATE_PROFILE
+  - name: parameters
+    type: string
+    description: A JSON object, as a string, with at least order_id when an order is involved.
+---
+# The agent loads ONLY this toolset (M-6). No tool here can change customer_orders.
+kind: toolset
+name: support_agent
+tools:
+  - get-order-status
+  - find-customer-orders
+  - action-log
+---
+# Login check. Plain code calls this tool, never the agent (M-2, M-6).
+# Demo only: the seed stores plain-text passwords (SPEC section 8). Never copy this pattern.
+kind: tool
+name: check-login
+type: postgres-sql
+source: login-db
+description: |
+  Check an email and password against the users table. Returns the customer's
+  email, full name and premium flag if they match, and no rows if they do not.
+statement: |
+  SELECT email, full_name, is_premium_customer
+  FROM users
+  WHERE email = $1 AND password = $2
+parameters:
+  - name: email
+    type: string
+    description: The email the person typed at login.
+  - name: password
+    type: string
+    description: The password the person typed at login.
+---
+# Used by the login code only. The agent never loads this toolset.
+kind: toolset
+name: login
+tools:
+  - check-login
