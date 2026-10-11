@@ -1,0 +1,12 @@
+# Lint rules for this project. Gate 0 of the eval runs `ruff check .` and must be clean.
+#
+# We keep ruff's own default rules, with ONE exception.
+
+[lint]
+ignore = [
+    # BLE001 "do not catch blind exception". We catch every exception ON PURPOSE around each
+    # guard, each pipeline step and each service check, and turn it into a loud error that
+    # names the step (SPEC P-4, section 11 R-4 "Fail loud"). Catching only some exception
+    # types there would let an unexpected failure escape without that error.
+    "BLE001",
+]
