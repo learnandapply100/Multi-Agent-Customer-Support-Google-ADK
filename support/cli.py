@@ -1,69 +1,134 @@
-"""Throwaway CLI for Stage 3: log in, then chat. Stage 4 replaces the loop with the pipeline.
+"""CLI front end. It runs NO pipeline logic: it only displays what support.pipeline yields (P-1).
 
-Run from the project folder:  python -m support.cli
+Interactive:   python -m support.cli
+Raw events:    echo "What is the status of order 3?" | SUPPORT_PASSWORD=alice \
+                   python -m support.cli --user alice.jones@example.com --events
+In --events mode, stdout carries NDJSON (one JSON event per line) and NOTHING else (C-3).
+Messages are read from stdin, one per line. Everything else goes to stderr.
 """
 
+import argparse
 import asyncio
 import getpass
+import json
+import os
 import sys
 
 from dotenv import load_dotenv
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from google.genai import types
 
 load_dotenv()  # reads GOOGLE_API_KEY, DB passwords etc. from .env
 
-from support.agent import open_agent  # noqa: E402  (after load_dotenv on purpose)
-from support.login import check_login  # noqa: E402
+from guards.judge_client import JUDGE_URL, judge_is_up  # noqa: E402  (after load_dotenv on purpose)
+from guards.masker_client import MASKER_URL, masker_is_up  # noqa: E402
+from support.agent import open_agent  # noqa: E402
+from support.login import TOOLBOX_URL, check_login  # noqa: E402
+from support.memory import mem0_is_configured  # noqa: E402
+from support.pipeline import run_turn  # noqa: E402
+from support.render import render  # noqa: E402
+from support.telemetry import PHOENIX_URL, flush, phoenix_is_up, setup_tracing  # noqa: E402
 
 APP_NAME = "customer_support"
 
 
-async def ask(runner: Runner, user_id: str, session_id: str, text: str) -> str:
-    message = types.Content(role="user", parts=[types.Part(text=text)])
-    reply = ""
-    async for event in runner.run_async(
-        user_id=user_id, session_id=session_id, new_message=message
-    ):
-        if event.is_final_response() and event.content and event.content.parts:
-            reply = "".join(p.text or "" for p in event.content.parts)
-    return reply or "(no reply)"
+def say(text: str) -> None:
+    """Human-facing text. Always stderr so it can never pollute --events output."""
+    print(text, file=sys.stderr, flush=True)
 
 
-async def main() -> None:
-    email = input("Email: ").strip()
-    password = getpass.getpass("Password: ")  # hidden input (C-1)
+def next_message(events_mode: bool) -> str | None:
+    """Return the next line, or None at end of input."""
+    if events_mode:
+        line = sys.stdin.readline()
+        return line.strip() if line else None
+    try:
+        return input("You: ").strip()
+    except EOFError:
+        return None
 
-    user = await check_login(email, password)
+
+def show(event: dict, events_mode: bool) -> None:
+    if events_mode:
+        print(json.dumps(event, default=str), flush=True)  # raw NDJSON, nothing else
+    else:
+        print(render(event), flush=True)  # one small block per event (Option B)
+
+
+async def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--user", help="log in as this email instead of being asked")
+    parser.add_argument("--events", action="store_true", help="print raw events as NDJSON on stdout")
+    args = parser.parse_args()
+
+    if args.events and not args.user:
+        say("--events needs --user (an email prompt would pollute stdout).")
+        return 1
+
+    # Refuse to start if Phoenix is down: otherwise turns would run with no trace (C-4, O-1).
+    if not phoenix_is_up():
+        say(f"Phoenix is not running at {PHOENIX_URL}. Start it first:  ./run.sh start")
+        return 1
+    # Same for the Judge: without it every turn would end in an error, so say so now (C-4).
+    if not judge_is_up():
+        say(f"The Security Judge is not running at {JUDGE_URL}. Start it first:  ./run.sh start")
+        return 1
+    # Same for the Masker: without it no reply could be checked for personal data (C-4).
+    if not masker_is_up():
+        say(f"The Data Masker is not running at {MASKER_URL}. Start it first:  ./run.sh start")
+        return 1
+    # Memory needs a Mem0 key. Without it every turn would end in an error at the recall step.
+    if not mem0_is_configured():
+        say("MEM0_API_KEY is missing. Add it to your .env file (memory, SPEC 5.7).")
+        return 1
+    setup_tracing()  # must happen BEFORE the agent is built, so its spans are captured
+
+    email = args.user or input("Email: ").strip()
+    password = os.getenv("SUPPORT_PASSWORD") if args.user else None
+    if password is None:
+        if args.events and not sys.stdin.isatty():
+            say("--events with piped input needs the password in the SUPPORT_PASSWORD environment variable.")
+            return 1
+        password = getpass.getpass("Password: ")  # hidden input (C-1)
+
+    try:
+        user = await check_login(email, password)
+    except Exception as exc:  # fail loud but readable: say which service is down (C-4)
+        say(f"Cannot check the login: {type(exc).__name__}: {str(exc).splitlines()[0] if str(exc) else ''}\n"
+            f"Is the MCP Toolbox running at {TOOLBOX_URL}? Start it first (TECHNICAL.md stage 2).")
+        return 1
     if user is None:
-        print("Invalid email or password.")
-        return
-    print(f"Welcome, {user['full_name']}! Type quit to leave.")
+        say("Invalid email or password.")
+        return 1
+    if not args.events:
+        say(f"Welcome, {user['full_name']}! Type quit to leave.")
 
-    # One toolset per logged-in user, with their email bound (Option A).
-    agent, toolbox = await open_agent(user["email"], user["full_name"])
+    try:
+        agent, toolbox = await open_agent(user["email"], user["full_name"])
+    except Exception as exc:
+        say(f"Cannot load the agent's tools: {type(exc).__name__}: {str(exc).splitlines()[0] if str(exc) else ''}\n"
+            f"Is the MCP Toolbox running at {TOOLBOX_URL}?")
+        return 1
     sessions = InMemorySessionService()
     runner = Runner(app_name=APP_NAME, agent=agent, session_service=sessions)
     session = await sessions.create_session(app_name=APP_NAME, user_id=user["email"])
 
     try:
-        while True:
-            try:
-                line = input("You: ").strip()
-            except EOFError:
-                break
+        while (line := next_message(args.events)) is not None:
             if line.lower() in {"quit", "exit", "q"}:
                 break
             if not line:
                 continue
-            print("Agent:", await ask(runner, user["email"], session.id, line))
+            async for event in run_turn(runner, user["email"], session.id, line):
+                show(event, args.events)
     finally:
         await toolbox.close()
+        flush()  # send queued spans to Phoenix before the program exits
+    return 0
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        sys.exit(asyncio.run(main()))
     except KeyboardInterrupt:
         sys.exit(0)

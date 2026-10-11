@@ -1,0 +1,21 @@
+# Stages 1-4
+google-adk
+toolbox-core
+python-dotenv
+
+# Stage 5 (tracing)
+arize-phoenix
+openinference-instrumentation-google-genai
+openinference-semantic-conventions
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-http
+httpx
+
+# Stage 6 (the Judge service). google-adk already installs these; listed because we import them.
+starlette
+uvicorn
+pydantic
+
+# NOTE: google-adk pins a range of opentelemetry versions. Install google-adk FIRST,
+# run `pip list | grep opentelemetry`, and if pip complains, pin opentelemetry-sdk and
+# opentelemetry-exporter-otlp-proto-http to the version google-adk pulled in.

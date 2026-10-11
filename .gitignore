@@ -4,6 +4,14 @@ runs/
 reports/
 __pycache__/
 .venv/
+.phoenix/
+.run/
+Phoenix-Span-Trees/
+scripts/
+eval_runner_instructions.md
+Extra-Checks.md
+Phoenix_Error.png
+Claude-Guardrail-Prompt.md
 
 AGENTS.md
 BUILD_LOG.template.md

@@ -4,35 +4,14 @@ It calls the `check-login` tool from the `login` toolset. The agent never loads 
 toolset, so it cannot call this tool.
 """
 
-import json
 import os
 
 from toolbox_core import ToolboxClient
 
+from support.toolresult import parse_rows
+
+# Same default as support/agent.py: this project's Toolbox runs on port 5001.
 TOOLBOX_URL = os.getenv("TOOLBOX_URL", "http://127.0.0.1:5001")
-
-
-def parse_rows(text) -> list[dict]:
-    """Turn a Toolbox tool result into a list of row dicts.
-
-    Toolbox returns the rows as a JSON string. Depending on the version that string is
-    empty (no rows), one object, a JSON array, or several objects stuck together.
-    """
-    if not isinstance(text, str):
-        return []
-    text = text.strip()
-    if not text or text == "null":
-        return []
-    decoder = json.JSONDecoder()
-    rows, i = [], 0
-    while i < len(text):
-        while i < len(text) and text[i].isspace():
-            i += 1
-        if i >= len(text):
-            break
-        value, i = decoder.raw_decode(text, i)
-        rows.extend(value if isinstance(value, list) else [value])
-    return rows
 
 
 async def check_login(email: str, password: str) -> dict | None:
