@@ -16,6 +16,11 @@ starlette
 uvicorn
 pydantic
 
+# Stage 9 (the web server, and reading tools.yaml to show each tool's SQL).
+# google-adk already installs both; listed because we import them.
+fastapi
+pyyaml
+
 # NOTE: google-adk pins a range of opentelemetry versions. Install google-adk FIRST,
 # run `pip list | grep opentelemetry`, and if pip complains, pin opentelemetry-sdk and
 # opentelemetry-exporter-otlp-proto-http to the version google-adk pulled in.

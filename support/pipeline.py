@@ -12,6 +12,7 @@ Stage 8: three more steps, so the order is now complete (P-2):
   save    stores the customer's message (never the reply) in Mem0.
 A guard that blocks ends the turn (P-3): no recall, no agent, no save.
 A step that fails ends the turn with an error; nothing is let through "just in case" (P-4).
+Stage 9: the `tool_call` event now also carries the tool's SQL and parameter names (7.1).
 """
 
 import asyncio
@@ -30,6 +31,7 @@ from guards.masker_client import ask_masker
 from guards.sanitizer import sanitize
 from support.memory import build_agent_input, recall, save
 from support.telemetry import get_tracer, trace_url
+from support.toolinfo import tool_info
 from support.toolresult import decode_args, only_own_rows, read_tool_response
 
 RUNS_DIR = Path("runs")
@@ -341,13 +343,17 @@ async def run_turn(runner, user_email: str, session_id: str, message: str):
                     if len(log["tool_calls"]) >= MAX_TOOL_CALLS:
                         terminated, cap_reason = "cap", "tool-call"
                         break
+                    # Stage 9: the SQL this tool runs and its parameter names, read from
+                    # tools.yaml, so a screen can show the query with values filled in (7.1).
+                    sql = tool_info(call.name)
                     entry = {"name": call.name, "ok": None, "ms": 0}
                     call_id = len(log["tool_calls"]) + 1
                     log["tool_calls"].append(entry)
                     pending.append({"id": call_id, "adk_id": call.id, "name": call.name, "start": now, "entry": entry})
                     yield {
                         "type": "tool_call", "id": call_id, "name": call.name, "args": decode_args(dict(call.args or {})),
-                        "info": {"kind": "MCP", "access": ACCESS.get(call.name, "READ")},
+                        "info": {"kind": "MCP", "access": ACCESS.get(call.name, "READ"),
+                                 "statement": sql["statement"], "params": sql["params"]},
                         "span": f"execute_tool {call.name}",
                     }
                 if terminated == "cap":

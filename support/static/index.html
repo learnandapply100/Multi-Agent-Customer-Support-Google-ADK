@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop Support</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --ink: #1d2433; --muted: #667085; --line: #e2e0d8;
+    --accent: #1f5fbf; --me: #1f5fbf; --me-ink: #ffffff;
+    --ok: #1a7f4b; --bad: #c0362c; --bad-bg: #fdecea; --run: #b7791f;
+    --code-bg: #f1efe8; --bound: #7a4fd0; --bound-bg: #efe8fb; --val-bg: #dcebff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --card: #1d2129; --ink: #e7e9ee; --muted: #9aa3b2; --line: #2e343f;
+      --accent: #7fb0ff; --me: #2f6fd6; --me-ink: #ffffff;
+      --ok: #4cc38a; --bad: #ff8a80; --bad-bg: #3a1f1d; --run: #e0b050;
+      --code-bg: #171a20; --bound: #c3a6ff; --bound-bg: #2c2440; --val-bg: #1e3355;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+
+  /* ---- login ---- */
+  #login-view { min-height: 100%; display: grid; place-items: center; padding: 16px; }
+  #login-form { width: 100%; max-width: 360px; background: var(--card); border: 1px solid var(--line);
+                border-radius: 12px; padding: 24px; display: grid; gap: 12px; }
+  #login-form h1 { margin: 0 0 4px; font-size: 20px; }
+  #login-form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  input { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+                   padding: 10px 16px; font-weight: 600; cursor: pointer; }
+  @media (prefers-color-scheme: dark) { button.primary { color: #0d1420; } }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  .form-error { color: var(--bad); font-size: 13px; min-height: 1.2em; margin: 0; }
+
+  /* ---- chat ---- */
+  #chat-view { height: 100%; display: flex; flex-direction: column; max-width: 820px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; flex: 1; }
+  header .who { font-size: 13px; color: var(--muted); }
+  .badge { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 99px;
+           background: var(--bound-bg); color: var(--bound); margin-left: 6px; }
+  button.link { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 4px; }
+  #log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .hint { color: var(--muted); text-align: center; margin: auto 0; }
+  .bubble { max-width: 80%; padding: 9px 13px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bubble.me { align-self: flex-end; background: var(--me); color: var(--me-ink); border-bottom-right-radius: 4px; }
+  .bubble.agent { align-self: flex-start; background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .bubble.problem { align-self: flex-start; background: var(--bad-bg); color: var(--bad); border: 1px solid var(--bad); }
+  #composer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+  #composer input { flex: 1; min-width: 0; background: var(--card); }
+
+  /* ---- the steps panel (one per turn) ---- */
+  details.steps { border: 1px solid var(--line); border-radius: 10px; background: var(--card); font-size: 13px; }
+  details.steps.blocked, details.steps.error { border-color: var(--bad); }
+  details.steps > summary { cursor: pointer; padding: 7px 12px; color: var(--muted); list-style-position: inside; }
+  details.steps > summary a { color: var(--accent); }
+  .rows { border-top: 1px solid var(--line); padding: 4px 12px 8px; }
+  .step { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .step:last-child { border-bottom: 0; }
+  .step-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .step-name { font-weight: 600; }
+  .status { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .status.passed { color: var(--ok); } .status.running { color: var(--run); }
+  .status.blocked, .status.error { color: var(--bad); }
+  .status.running::after { content: " …"; }
+  .meta { color: var(--muted); margin-left: auto; text-align: right; }
+  .detail { color: var(--muted); overflow-wrap: anywhere; }
+  .step.blocked .detail, .step.error .detail { color: var(--bad); }
+  .children { margin: 4px 0 0 10px; padding-left: 10px; border-left: 2px solid var(--line); display: grid; gap: 6px;
+              grid-template-columns: minmax(0, 1fr); }  /* lets wide SQL wrap and wide tables scroll */
+  .children:empty { display: none; }
+  .child-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  .tag { font-size: 11px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+  .tag.write { color: var(--run); border-color: var(--run); }
+  pre.sql { margin: 4px 0; padding: 8px 10px; background: var(--code-bg); border-radius: 6px;
+            white-space: pre-wrap; overflow-wrap: anywhere; }
+  .val { background: var(--val-bg); border-radius: 3px; padding: 0 2px; }
+  .val.bound { background: var(--bound-bg); color: var(--bound); }
+  .note { color: var(--muted); font-size: 12px; }
+  .note .bound-word { color: var(--bound); font-weight: 600; }
+  .scroll-x { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+  td.wrap { white-space: normal; min-width: 160px; }
+  th { color: var(--muted); font-weight: 600; }
+  .mem { display: flex; gap: 8px; align-items: baseline; }
+  .mem .used { color: var(--ok); font-weight: 600; } .mem .skipped { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<main id="login-view">
+  <form id="login-form">
+    <h1>Shop Support</h1>
+    <label>Email <input id="email" type="email" autocomplete="username" required></label>
+    <label>Password <input id="password" type="password" autocomplete="current-password" required></label>
+    <p class="form-error" id="login-error" role="alert"></p>
+    <button class="primary" type="submit">Log in</button>
+  </form>
+</main>
+
+<main id="chat-view" hidden>
+  <header>
+    <h1>Shop Support</h1>
+    <span class="who" id="who"></span>
+    <button class="link" id="logout" type="button">Log out</button>
+  </header>
+  <div id="log" aria-live="polite"><p class="hint" id="hint">Ask about your orders, deliveries, returns or account.</p></div>
+  <form id="composer">
+    <input id="message" autocomplete="off" placeholder="Type your message" aria-label="Your message">
+    <button class="primary" id="send" type="submit">Send</button>
+  </form>
+</main>
+
+<script>
+// This page has NO logic about the turn. It reads the events that POST /api/chat streams
+// (the same events the CLI prints) and draws each one when it arrives.
+//
+// SAFETY: every piece of text is put on the page with textContent, never innerHTML.
+// So a message that contains HTML or a script tag is shown as plain text and cannot run.
+
+const $ = (id) => document.getElementById(id);
+let user = null;   // { user_id, full_name, is_premium } after login
+let busy = false;  // true while a turn is streaming
+
+// Small helper: make an element. el("span", "tag", "READ") -> <span class="tag">READ</span>
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+}
+const ms = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + " s" : n + " ms");
+
+async function postJson(path, body) {
+  return fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+}
+
+// ---------------------------------------------------------------- login / logout
+$("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("login-error").textContent = "";
+  let reply, data;
+  try {
+    reply = await postJson("/api/login", { email: $("email").value, password: $("password").value });
+    data = await reply.json();
+  } catch {
+    $("login-error").textContent = "Cannot reach the server.";
+    return;
+  }
+  if (!reply.ok) { $("login-error").textContent = data.error || "Login failed."; return; }
+  user = data;
+  $("password").value = "";
+  $("who").textContent = user.full_name;
+  if (user.is_premium) $("who").append(el("span", "badge", "Premium"));
+  $("login-view").hidden = true;
+  $("chat-view").hidden = false;
+  $("message").focus();
+});
+
+function showLogin(reason) {
+  user = null;
+  const hint = el("p", "hint", "Ask about your orders, deliveries, returns or account.");
+  hint.id = "hint";
+  $("log").replaceChildren(hint);
+  $("chat-view").hidden = true;
+  $("login-view").hidden = false;
+  $("login-error").textContent = reason || "";
+}
+
+$("logout").addEventListener("click", async () => {
+  if (user) { try { await postJson("/api/logout", { user_id: user.user_id }); } catch { /* logging out anyway */ } }
+  showLogin("");
+});
+
+// ---------------------------------------------------------------- one turn
+function add(node) {
+  const hint = $("hint"); if (hint) hint.remove();
+  $("log").append(node);
+  node.scrollIntoView({ block: "end" });
+  return node;
+}
+
+$("composer").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const message = $("message").value.trim();
+  if (!message || busy || !user) return;
+  busy = true; $("send").disabled = true; $("message").value = "";
+
+  add(el("div", "bubble me", message));
+  const turn = newTurn();
+  try {
+    await runTurn(message, turn);
+  } catch (err) {
+    finishWithProblem(turn, "The connection was lost before the turn finished.");
+  }
+  busy = false; $("send").disabled = false; $("message").focus();
+});
+
+// The steps panel for one turn: <details> so it can open and close (Option A).
+function newTurn() {
+  const panel = el("details", "steps");
+  panel.open = true;                        // open while the turn runs
+  const summary = el("summary", null, "Working…");
+  const rows = el("div", "rows");
+  panel.append(summary, rows);
+  add(panel);
+  return { panel, summary, rows, steps: {}, tools: {}, stepCount: 0, traceUrl: null, ended: false };
+}
+
+async function runTurn(message, turn) {
+  const reply = await postJson("/api/chat", { user_id: user.user_id, message });
+
+  // 400, 401 and 413 are decided before streaming starts, so they arrive as normal JSON.
+  if (!reply.ok) {
+    const data = await reply.json().catch(() => ({}));
+    if (reply.status === 401) { showLogin("Your session ended. Please log in again."); return; }
+    finishWithProblem(turn, data.error || `The server answered with status ${reply.status}.`);
+    return;
+  }
+
+  // Read the stream piece by piece. A piece can end in the middle of a line, so we keep
+  // the unfinished part in `buffer` and only handle complete lines.
+  const reader = reply.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop();                   // the last part may be an unfinished line
+    for (const line of lines) if (line.trim()) draw(JSON.parse(line), turn);
+  }
+  if (buffer.trim()) draw(JSON.parse(buffer), turn);
+  if (!turn.ended) finishWithProblem(turn, "The stream ended without a final answer.");
+}
+
+// ---------------------------------------------------------------- drawing events
+function draw(event, turn) {
+  switch (event.type) {
+    case "trace":       turn.traceUrl = event.url; break;
+    case "stage":       drawStage(event, turn); break;
+    case "step":        drawStep(event, turn); break;
+    case "llm":         drawLlm(event, turn); break;
+    case "tool_call":   drawToolCall(event, turn); break;
+    case "tool_result": drawToolResult(event, turn); break;
+    case "final":       drawFinal(event, turn); break;
+    case "error":       drawError(event, turn); break;
+  }
+  turn.panel.scrollIntoView({ block: "end" });
+}
+
+// A step started: add its row, marked "running".
+function drawStage(event, turn) {
+  const row = el("div", "step running");
+  const head = el("div", "step-head");
+  const status = el("span", "status running", "running");
+  const meta = el("span", "meta mono");
+  head.append(el("span", "step-name", event.label || event.key), status, meta);
+  const detail = el("div", "detail");
+  const children = el("div", "children");
+  row.append(head, detail, children);
+  turn.rows.append(row);
+  turn.steps[event.key] = { row, status, meta, detail, children };
+}
+
+// A step finished: fill in its status, detail, time and span name.
+function drawStep(event, turn) {
+  const step = turn.steps[event.key];
+  if (!step) return;
+  turn.stepCount += 1;
+  setStatus(step, event.status);
+  step.detail.textContent = event.detail || "";
+  step.meta.textContent = `${ms(event.ms)} · ${event.span}` + (event.kind ? ` · ${event.kind}` : "");
+  // The recall step lists every memory it found, used or not, with its score (R-5).
+  for (const m of event.memories || []) {
+    const line = el("div", "mem");
+    line.append(el("span", m.inserted ? "used" : "skipped", m.inserted ? "used" : "skipped"),
+                el("span", null, `“${m.memory}”`),
+                el("span", "note mono", `score ${m.score}` + (m.reason ? ` · ${m.reason}` : "")));
+    step.children.append(line);
+  }
+}
+
+function setStatus(step, status) {
+  step.row.className = "step " + status;
+  step.status.className = "status " + status;
+  step.status.textContent = status;
+}
+
+function drawLlm(event, turn) {
+  const agent = turn.steps.agent; if (!agent) return;
+  const line = el("div", "child-head");
+  line.append(el("span", "tag", "model"), el("span", null, event.decision),
+              el("span", "note mono", `${event.model} · ${event.tokens_in} in / ${event.tokens_out} out · ${ms(event.ms)} · ${event.span}`));
+  agent.children.append(line);
+}
+
+function drawToolCall(event, turn) {
+  const agent = turn.steps.agent; if (!agent) return;
+  const info = event.info || {};
+  const box = el("div");
+  const head = el("div", "child-head");
+  head.append(el("span", "tag", "tool"), el("strong", null, event.name),
+              el("span", "tag" + (info.access === "WRITE" ? " write" : ""), `${info.kind} · ${info.access}`),
+              el("span", "note mono", event.span));
+  box.append(head);
+  if (info.statement) box.append(...sqlWithValues(info, event.args || {}));
+  const result = el("div", "note", "waiting for the result…");
+  box.append(result);
+  agent.children.append(box);
+  turn.tools[event.id] = result;
+}
+
+// Show the SQL with each $1, $2, ... replaced by its value.
+// A value the MODEL chose comes from event.args. A parameter that is not in args was BOUND
+// at login (the customer's email), so the model never saw it and could not change it (M-5).
+function sqlWithValues(info, args) {
+  const pre = el("pre", "sql mono");
+  const boundNames = [];
+  const parts = info.statement.split(/(\$\d+)/);   // keeps the $n pieces in the list
+  for (const part of parts) {
+    const match = /^\$(\d+)$/.exec(part);
+    const name = match ? (info.params || [])[Number(match[1]) - 1] : undefined;
+    if (name === undefined) { pre.append(part); continue; }
+    if (name in args) {
+      pre.append(el("span", "val", sqlLiteral(args[name])));
+    } else {
+      const span = el("span", "val bound", sqlLiteral(user.user_id));
+      span.title = `${name}: bound at login, not chosen by the model`;
+      pre.append(span);
+      if (!boundNames.includes(name)) boundNames.push(name);
+    }
+  }
+  if (!boundNames.length) return [pre];
+  const note = el("div", "note");
+  note.append(el("span", "bound-word", "bound"), ` at login, not chosen by the model: ${boundNames.join(", ")}`);
+  return [pre, note];
+}
+
+function sqlLiteral(value) {
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return "'" + text.replaceAll("'", "''") + "'";
+}
+
+function drawToolResult(event, turn) {
+  const slot = turn.tools[event.id]; if (!slot) return;
+  slot.className = "";
+  slot.replaceChildren();
+  if (!event.ok) {
+    slot.append(el("div", "detail", `Tool failed after ${ms(event.ms)}: ${event.error}`));
+    slot.firstChild.style.color = "var(--bad)";
+    return;
+  }
+  const rows = event.result;
+  if (Array.isArray(rows) && rows.length && rows.every((r) => r && typeof r === "object")) {
+    slot.append(el("div", "note", `${rows.length} row${rows.length === 1 ? "" : "s"} · ${ms(event.ms)}`), table(rows));
+  } else if (Array.isArray(rows) && rows.length === 0) {
+    slot.append(el("div", "note", `0 rows (nothing found) · ${ms(event.ms)}`));
+  } else {
+    slot.append(el("div", "note", `result · ${ms(event.ms)}`), el("pre", "sql mono", JSON.stringify(rows, null, 2)));
+  }
+  if (event.withheld_rows) {
+    slot.append(el("div", "detail", `${event.withheld_rows} row(s) owned by someone else were removed`));
+  }
+}
+
+// W-4: a tool result is drawn as a table, one column per field.
+function table(rows) {
+  const columns = [];
+  for (const row of rows) for (const key of Object.keys(row)) if (!columns.includes(key)) columns.push(key);
+  const t = el("table", "mono");
+  const head = el("tr");
+  for (const c of columns) head.append(el("th", null, c));
+  t.append(head);
+  for (const row of rows) {
+    const tr = el("tr");
+    for (const c of columns) {
+      const v = row[c];
+      const isObject = v !== null && typeof v === "object";
+      tr.append(el("td", isObject ? "wrap" : null, v === null || v === undefined ? "" : isObject ? JSON.stringify(v) : v));
+    }
+    t.append(tr);
+  }
+  const wrap = el("div", "scroll-x");   // a wide table scrolls sideways inside its own box
+  wrap.append(t);
+  return wrap;
+}
+
+// ---------------------------------------------------------------- end of a turn
+function summaryLine(turn, text) {
+  turn.summary.replaceChildren(text);
+  if (turn.traceUrl) {
+    const link = el("a", null, "view trace");
+    link.href = turn.traceUrl; link.target = "_blank"; link.rel = "noopener";
+    turn.summary.append(" · ", link);
+  }
+}
+
+function drawFinal(event, turn) {
+  turn.ended = true;
+  const steps = `${turn.stepCount} step${turn.stepCount === 1 ? "" : "s"} · ${ms(event.wall_clock_ms)}`;
+  if (event.blocked) {
+    // A blocked turn stays open, so you can see which guard stopped it.
+    turn.panel.classList.add("blocked");
+    summaryLine(turn, `Blocked at ${event.blocked_at} · ${steps}`);
+  } else {
+    summaryLine(turn, steps + (event.terminated === "cap" ? " · stopped at a limit" : ""));
+    turn.panel.open = false;                // a normal turn folds down to one line
+  }
+  add(el("div", "bubble agent", event.response));
+}
+
+function drawError(event, turn) {
+  turn.ended = true;
+  const step = turn.steps[event.step];
+  if (step) { setStatus(step, "error"); step.detail.textContent = event.error; }
+  turn.panel.classList.add("error");
+  summaryLine(turn, `Error at ${event.step}`);
+  add(el("div", "bubble problem", "Sorry, something went wrong and I could not answer. Please try again."));
+}
+
+// For problems that are not pipeline events: a refused request, or a lost connection.
+function finishWithProblem(turn, text) {
+  turn.ended = true;
+  for (const step of Object.values(turn.steps)) {
+    if (step.status.textContent === "running") { setStatus(step, "error"); step.detail.textContent = "did not finish"; }
+  }
+  if (turn.rows.childElementCount) { turn.panel.classList.add("error"); summaryLine(turn, "Did not finish"); }
+  else turn.panel.remove();
+  add(el("div", "bubble problem", text));
+}
+</script>
+</body>
+</html>

@@ -189,10 +189,17 @@ The margin is narrow, so irrelevant memories may be inserted. I accept this trad
 
 ## Stage 9: the web UI
 - **My sketch, in words:**
+A plain chat app. My messages are on the right, the agent’s replies are on the left, and a text box is at the bottom.\
+When I send a message, a steps panel opens right under it. It is open while the turn runs. Each step appears as a new row when its event arrives: sanitize, judge, guardrail, recall, agent, mask, save. A row shows the step name, passed or blocked, a short detail, how long it took, and the span name.\
+Under the agent row, tool calls are indented. Each one shows the tool name, the SQL with the values filled in, and the result as a small table. The recall row lists each memory with its score and whether it was used.\
+When the reply arrives, the panel closes by itself and becomes one summary line, like “7 steps · 7.4 s · view trace”. Clicking the line opens the panel again. “View trace” opens the turn in Phoenix.\
+If a guard blocks, the panel stays open, the blocked row is red, and no rows appear after it. If a step errors, the same thing happens, with the error text shown.
+
 - **Something the UI shows that the CLI doesn't (feature or leak?):**
+The UI shows the exact SQL with the values filled in and also shows the email as bound in purple. The normal CLI view doesn’t show the SQL (it is only in the raw `--events` output).This is a feature in this case as I am using the web app as a developer and this is useful for debugging. For a real user this would be a leak and a real product would not show these details on UI.\
 
 ## Stage 10: the eval runner
-- **How I handled the memory waits:**
+- **How I handled the memory waits:** I used interleaving with other sets approach. Parallel users is another option but many model calls at once may hit the Gemini rate limit so I went for the safer approach.
 - **First run's failing rows, and what I changed:**
 - **Second run: see `reports/eval.json` (don't retype numbers here).**
 - **Successful turn I read end to end (trace id), and what it taught me:**
