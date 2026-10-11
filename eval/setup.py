@@ -19,8 +19,8 @@ from dotenv import load_dotenv
 
 load_dotenv()  # MEM0_API_KEY lives in .env
 
-from eval.client import RUNS_DIR, EvalError  # noqa: E402
-from support.memory import MEM0_BASE_URL  # noqa: E402
+from eval.client import RUNS_DIR, EvalError
+from support.memory import MEM0_BASE_URL
 
 DB_NAME = os.getenv("EVAL_DB_NAME", "online_shop")
 MEM0_CLEAR_TIMEOUT_S = 90
@@ -45,7 +45,7 @@ def _psql(sql_file: str, *extra: str) -> str:
     # -w: never stop to ask for a password (nobody is there to type it); fail instead.
     command = ["psql", "-d", DB_NAME, "-w", "-q", "-v", "ON_ERROR_STOP=1", *extra, "-f", sql_file]
     try:
-        done = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        done = subprocess.run(command, capture_output=True, text=True, check=False, timeout=60)
     except FileNotFoundError as exc:
         raise EvalError("psql was not found. Run the eval in the same terminal setup you use for psql.") from exc
     if done.returncode != 0:

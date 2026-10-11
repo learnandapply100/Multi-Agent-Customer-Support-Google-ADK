@@ -310,7 +310,7 @@ async def run_turn(runner, user_email: str, session_id: str, message: str):
                     event = await asyncio.wait_for(events.__anext__(), left)
                 except StopAsyncIteration:
                     break
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if time.monotonic() - t0 < AGENT_DEADLINE_S - 0.1:
                         raise  # a real timeout from inside the model or tool, not our budget
                     terminated, cap_reason = "cap", "time"

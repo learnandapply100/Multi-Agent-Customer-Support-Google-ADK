@@ -21,7 +21,7 @@ from starlette.routing import Route
 
 load_dotenv()  # the Judge is a separate process, so it reads GOOGLE_API_KEY from .env itself
 
-from guards.judge.agent import MODEL, judge  # noqa: E402  (after load_dotenv on purpose)
+from guards.judge.agent import MODEL, judge
 
 HOST = os.getenv("JUDGE_HOST", "127.0.0.1")
 PORT = int(os.getenv("JUDGE_PORT", "10002"))

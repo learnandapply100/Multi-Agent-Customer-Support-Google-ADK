@@ -7,7 +7,7 @@ ones declared in THRESHOLDS.md sections 1 to 5 and 7. If THRESHOLDS changes, cha
 import json
 import math
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from eval.client import RUNS_DIR
@@ -166,7 +166,7 @@ def trajectories(rows: list[dict]) -> dict:
 
 def _commit() -> str:
     try:
-        done = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=10)
+        done = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False, timeout=10)
         return done.stdout.strip() or "unknown"
     except FileNotFoundError:
         return "unknown"
@@ -176,7 +176,7 @@ def write_report(rows: list[dict], metrics: dict, gates: dict, model: str) -> di
     report = {
         "assignment": "Assignment 3: Customer Support",
         "commit": _commit(),
-        "ran_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ran_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "model": model,
         "metrics": metrics,
         "items": [{"set": r["set"], "id": r["id"], "user": r["user"], "trace_id": r.get("trace_id"),

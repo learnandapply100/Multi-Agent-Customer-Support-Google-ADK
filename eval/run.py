@@ -19,20 +19,54 @@ Gates 0 to 2 stop the run when they fail (EVALS law 4). Gates 3 and 4 are both w
 and written to the report even if one fails, because the report is the evidence.
 Exit code: 0 = every gate passed, 1 = warnings only, 2 = at least one gate failed.
 The full run takes about 20 minutes.
+
+A QUICK run, for checking one change without waiting 20 minutes:
+
+    python -m eval.run --only order            (one set)
+    python -m eval.run --only probe,action     (several sets)
+
+Set names: attack, offtopic, probe, legit, order, action, memory. A quick run checks /health,
+resets the database, runs only those sets and prints their scores and latency. It does NOT
+write reports/eval.json and does NOT move old run logs: only a full run is evidence.
 """
 
+import argparse
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
 from eval.checks import check_event_order, outcome
-from eval.client import BASE_URL, USERS, EvalError, load_set, open_client, run_cli_item, run_item
-from eval.report import REPORT_PATH, add_trace_checks, build_metrics, gate_trajectory, write_report
-from eval.scoring import (facts, score_action, score_ask, score_legit, score_must_block, score_order,
-                          score_plant, score_probe, unknown_tools)
+from eval.client import (
+    BASE_URL,
+    USERS,
+    EvalError,
+    load_set,
+    open_client,
+    run_cli_item,
+    run_item,
+)
+from eval.report import (
+    REPORT_PATH,
+    add_trace_checks,
+    build_metrics,
+    gate_trajectory,
+    percentile,
+    write_report,
+)
+from eval.scoring import (
+    facts,
+    score_action,
+    score_ask,
+    score_legit,
+    score_must_block,
+    score_order,
+    score_plant,
+    score_probe,
+    unknown_tools,
+)
 from eval.setup import archive_runs, clear_mem0, reset_db, snapshot_orders
 from eval.static import gate_static
 from eval.traces import wait_for_spans
@@ -186,6 +220,74 @@ def run_all_sets(client, rows: list[dict]) -> tuple[bool, float | None]:
     return orders_unchanged, (min(waits) if waits else None)
 
 
+# The sets a quick run can pick from, and how each one is scored.
+QUICK_SETS = {"attack": score_must_block, "offtopic": score_must_block, "probe": score_probe,
+              "legit": score_legit, "order": score_order, "action": score_action}
+
+
+def run_memory_pairs(client, rows: list[dict]) -> None:
+    """The memory pairs on their own: clear, plant, wait MEM_WAIT_S, ask. Used by quick runs."""
+    pairs = load_set("memory")
+    print("\nClearing Mem0 for the memory-pair users...")
+    clear_mem0(sorted({USERS[p["user"]] for p in pairs}))
+    plants = {r["id"]: r for r in run_set(client, "memory_plant", score_plant, rows, "plant",
+                                          "memory pairs: PLANT", "memory")}
+    print(f"\nWaiting {MEM_WAIT_S} s so Mem0 can store the memories (T-MEM-WAIT)...")
+    time.sleep(MEM_WAIT_S)
+
+    def ask_score(item, result):
+        scored = score_ask(item, result)
+        if not plants[item["id"]]["pass"]:
+            scored["pass"] = False
+            scored["notes"].insert(0, "its plant turn did not finish")
+        return scored
+
+    run_set(client, "memory", ask_score, rows, "ask", "memory pairs: ASK")
+
+
+def quick_run(names: list[str]) -> int:
+    """Run only the named sets. Prints scores and latency; writes no report."""
+    unknown = [n for n in names if n not in QUICK_SETS and n != "memory"]
+    if unknown:
+        print(f"Unknown set name(s): {', '.join(unknown)}. Choose from: {', '.join(QUICK_SETS)}, memory")
+        return 2
+    started_utc, rows = datetime.now(UTC), []
+    try:
+        with open_client() as client:
+            if not gate_health(client)[0]:
+                print("Stopped: a service is down.")
+                return 2
+            print("Resetting the database...")
+            reset_db()
+            for name in names:
+                if name == "memory":
+                    run_memory_pairs(client, rows)
+                else:
+                    run_set(client, name, QUICK_SETS[name], rows)
+        print(f"\nWaiting {SPAN_SETTLE_S} s for the last spans to reach Phoenix, then reading the traces...")
+        time.sleep(SPAN_SETTLE_S)
+        add_trace_checks(rows, wait_for_spans({r["trace_id"] for r in rows if r.get("trace_id")}, started_utc))
+    except httpx.ConnectError:
+        print(f"Cannot reach a service the eval needs. Is the web server up at {BASE_URL}, and Phoenix too?")
+        return 2
+    except EvalError as exc:
+        print(f"The eval could not go on: {exc}")
+        return 2
+
+    print("\nQUICK RUN  (not evidence: no report was written)")
+    for name in names:
+        mine = [r for r in rows if r["set"] == name]
+        failed = [r for r in mine if not r["pass"]]
+        answered = [r["ms"] for r in mine if r.get("terminated") in ("done", "cap")]
+        line = f"  {name:<9}{len(mine) - len(failed)} of {len(mine)} passed"
+        if answered:
+            line += f"   answered turns: p50 {percentile(answered, 50)} ms, p95 {percentile(answered, 95)} ms"
+        print(line)
+        for row in failed:   # the trace notes are only known now, so print the reasons again
+            print(f"        {row['id']}: {'; '.join(row['notes']) or 'failed'}")
+    return 0
+
+
 def run_cli_check(rows: list[dict]) -> None:
     """G-EVENTS: the event rules must hold for the CLI too, so the smoke items also go through it."""
     print("\nCLI  the three smoke items through `support.cli --events`")
@@ -203,7 +305,13 @@ def print_gate(name: str, failures: list[str], warnings: list[str]) -> None:
 
 
 def main() -> int:
-    start, started_utc = time.monotonic(), datetime.now(timezone.utc)
+    parser = argparse.ArgumentParser(description="The eval runner. With no option it does the full run.")
+    parser.add_argument("--only", help="quick run of these sets only, comma-separated (for example: order)")
+    args = parser.parse_args()
+    if args.only:
+        return quick_run([name.strip() for name in args.only.split(",") if name.strip()])
+
+    start, started_utc = time.monotonic(), datetime.now(UTC)
     rows: list[dict] = []
     try:
         static_failures, static_warnings = gate_static()
@@ -243,7 +351,7 @@ def main() -> int:
     missed = [name for name, m in metrics.items() if not m["pass"]]
     print("\nGATE 4  EVAL")
     for name, m in metrics.items():
-        print(f"  {'pass' if m['pass'] else 'FAIL'}  {name:<20} {str(m['value']):>8}   target {m['target']:<10} n={m['n']}")
+        print(f"  {'pass' if m['pass'] else 'FAIL'}  {name:<20} {m['value']!s:>8}   target {m['target']:<10} n={m['n']}")
     print(f"  -> {'FAIL: ' + ', '.join(missed) if missed else 'pass'}")
 
     warnings = static_warnings + trajectory_warnings

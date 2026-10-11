@@ -24,22 +24,27 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    StreamingResponse,
+)
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from toolbox_core import ToolboxClient
 
 load_dotenv()  # reads GOOGLE_API_KEY, DB passwords etc. from .env
 
-from guards.judge_client import JUDGE_URL, judge_is_up  # noqa: E402  (after load_dotenv on purpose)
-from guards.masker_client import MASKER_URL, masker_is_up  # noqa: E402
-from guards.sanitizer import MAX_CHARS  # noqa: E402  (the Sanitizer's length limit, reused for 413)
-from support.agent import MODEL, open_agent  # noqa: E402
-from support.login import TOOLBOX_URL, check_login  # noqa: E402
-from support.memory import mem0_is_configured, recall  # noqa: E402
-from support.pipeline import run_turn  # noqa: E402
-from support.telemetry import PHOENIX_URL, flush, phoenix_is_up, setup_tracing  # noqa: E402
-from support.toolresult import parse_rows  # noqa: E402
+from guards.judge_client import JUDGE_URL, judge_is_up
+from guards.masker_client import MASKER_URL, masker_is_up
+from guards.sanitizer import MAX_CHARS
+from support.agent import MODEL, open_agent
+from support.login import TOOLBOX_URL, check_login
+from support.memory import mem0_is_configured, recall
+from support.pipeline import run_turn
+from support.telemetry import PHOENIX_URL, flush, phoenix_is_up, setup_tracing
+from support.toolresult import parse_rows
 
 APP_NAME = "customer_support"
 INDEX_HTML = Path(__file__).parent / "static" / "index.html"

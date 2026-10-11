@@ -20,14 +20,14 @@ from google.adk.sessions import InMemorySessionService
 
 load_dotenv()  # reads GOOGLE_API_KEY, DB passwords etc. from .env
 
-from guards.judge_client import JUDGE_URL, judge_is_up  # noqa: E402  (after load_dotenv on purpose)
-from guards.masker_client import MASKER_URL, masker_is_up  # noqa: E402
-from support.agent import open_agent  # noqa: E402
-from support.login import TOOLBOX_URL, check_login  # noqa: E402
-from support.memory import mem0_is_configured  # noqa: E402
-from support.pipeline import run_turn  # noqa: E402
-from support.render import render  # noqa: E402
-from support.telemetry import PHOENIX_URL, flush, phoenix_is_up, setup_tracing  # noqa: E402
+from guards.judge_client import JUDGE_URL, judge_is_up
+from guards.masker_client import MASKER_URL, masker_is_up
+from support.agent import open_agent
+from support.login import TOOLBOX_URL, check_login
+from support.memory import mem0_is_configured
+from support.pipeline import run_turn
+from support.render import render
+from support.telemetry import PHOENIX_URL, flush, phoenix_is_up, setup_tracing
 
 APP_NAME = "customer_support"
 

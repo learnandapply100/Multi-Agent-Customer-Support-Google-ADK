@@ -33,8 +33,8 @@ _RAW = [
     ("path: system file", r"/etc/(passwd|shadow)\b"),
     # --- prompt injection and prompt extraction: fixed phrases only ---
     ("prompt: ignore instructions",
-     r"\b(ignore|forget|disregard)\s+(all\s+)?(your\s+(previous\s+)?|(the\s+)?(previous|prior|above|earlier)\s+)"
-     r"(instructions|rules|prompts?)\b"),
+     (r"\b(ignore|forget|disregard)\s+(all\s+)?(your\s+(previous\s+)?|(the\s+)?(previous|prior|above|earlier)\s+)"
+     r"(instructions|rules|prompts?)\b")),
     ("prompt: system prompt", r"\bsystem\s+prompt\b"),
     ("prompt: reveal instructions", r"\b(print|show|reveal|repeat|quote)\s+(me\s+)?your\s+(instructions|rules|prompt)\b"),
     ("prompt: repeat everything above", r"\brepeat\s+everything\s+above\b"),

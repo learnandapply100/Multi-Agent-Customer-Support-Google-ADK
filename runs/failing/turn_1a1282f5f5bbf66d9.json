@@ -1,0 +1,30 @@
+{
+  "turn_id": "turn_1a1282f5f5bbf66d9",
+  "trace_id": "516ffdda1e259927f80abaea456e20c8",
+  "user": "alice.jones@example.com",
+  "message": "Where is my last order?",
+  "terminated": "error",
+  "blocked_at": null,
+  "wall_clock_ms": 85,
+  "tokens": {
+    "in": 0,
+    "out": 0
+  },
+  "steps": [
+    {
+      "key": "sanitize",
+      "status": "passed",
+      "ms": 0,
+      "detail": "23 characters, all allowed, no obvious patterns"
+    },
+    {
+      "key": "judge",
+      "status": "error",
+      "ms": 35,
+      "detail": "Security Judge unreachable: cannot connect to http://127.0.0.1:10002. The request could not be checked, so it was not answered."
+    }
+  ],
+  "tool_calls": [],
+  "llm_calls": 0,
+  "error": "Security Judge unreachable: cannot connect to http://127.0.0.1:10002. The request could not be checked, so it was not answered."
+}

@@ -89,7 +89,7 @@ def run_cli_item(user: str, message: str) -> dict:
     try:
         done = subprocess.run(
             [sys.executable, "-m", "support.cli", "--user", email, "--events"],
-            input=message + "\n", capture_output=True, text=True, timeout=120,
+            input=message + "\n", capture_output=True, text=True, check=False, timeout=120,
             env={**os.environ, "SUPPORT_PASSWORD": user},
         )
     except subprocess.TimeoutExpired as exc:

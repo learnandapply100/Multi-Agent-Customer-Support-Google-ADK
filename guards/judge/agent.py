@@ -3,6 +3,10 @@
 Stage 6 decision: a pattern match blocks on its own and the model is NOT called (fast).
 Only when the patterns find nothing does the model read the message. The pattern tool is
 called by this code, not chosen by the model, so it can never be skipped (lesson of R-2).
+
+Stage 10 change: the model is asked to think LESS before it answers (thinking level "low"),
+because the Judge only has to give a one-word decision and its latency is part of every turn
+(T-LAT-P50). Set JUDGE_THINKING=default to go back to the model's own default.
 """
 
 import asyncio
@@ -11,6 +15,7 @@ import uuid
 from typing import Literal
 
 from google.adk.agents import LlmAgent
+from google.adk.planners import BuiltInPlanner
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
@@ -20,6 +25,7 @@ from guards.judge.patterns import find_attack_patterns
 
 MODEL = os.getenv("JUDGE_MODEL", "gemini-3.5-flash")
 MODEL_TIMEOUT_S = 8   # a Judge slower than this is treated as a failed Judge, never as "allow"
+THINKING = os.getenv("JUDGE_THINKING", "low")   # minimal, low, medium, high, or default
 APP_NAME = "security_judge"
 
 INSTRUCTION = """\
@@ -53,6 +59,13 @@ If you are unsure, allow. Give a short reason either way.
 """
 
 
+def _thinking_planner(level: str):
+    """How much the model thinks before answering. None = leave the model's default alone."""
+    if level.lower() == "default":
+        return None
+    return BuiltInPlanner(thinking_config=types.ThinkingConfig(thinking_level=level.upper()))
+
+
 class Verdict(BaseModel):
     """J-3: the verdict is explicit. It is never an echo of the input."""
     verdict: Literal["allow", "block"]
@@ -65,6 +78,7 @@ judge_agent = LlmAgent(
     description="Judges whether a customer message is an attack.",
     instruction=INSTRUCTION,
     output_schema=Verdict,   # makes the model answer with JSON in exactly this shape
+    planner=_thinking_planner(THINKING),
 )
 _sessions = InMemorySessionService()
 _runner = Runner(app_name=APP_NAME, agent=judge_agent, session_service=_sessions)

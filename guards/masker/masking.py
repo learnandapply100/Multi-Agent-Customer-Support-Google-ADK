@@ -53,7 +53,7 @@ _PHONE = (
     r"(?!\d|[-.]\d))"
 )
 
-_PII = re.compile("|".join([_EMAIL, _CARD, _PHONE]))
+_PII = re.compile(f"{_EMAIL}|{_CARD}|{_PHONE}")
 
 
 def mask_text(text: str, user_email: str) -> dict:

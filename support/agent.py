@@ -36,6 +36,11 @@ Rules:
   tell them a person will act on it. Use exactly one action_type from: CANCEL_ORDER,
   RETURN_ORDER, UPDATE_ADDRESS, UPDATE_PREFERENCE, UPDATE_PROFILE. Include order_id in
   parameters whenever an order is involved.
+- Before you log a change for an order, make sure the order is on this customer's account
+  in THIS turn: call get-order-status when they give an order number, or find-customer-orders
+  when they name a product. Only call action-log after that lookup returned the order. If the
+  lookup finds nothing, say "I can't find that order on your account." and do NOT call
+  action-log.
 - If it is unclear WHICH order the customer means, ask one short question and do not log yet.
 - Only log a request that a person could act on. If the detail to record is missing (the
   customer says "update my address" with no address, or "add my allergy information" without

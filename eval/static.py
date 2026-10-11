@@ -31,13 +31,16 @@ CHANGES_ORDERS = re.compile(
 def _git(*args: str) -> list[str] | None:
     """Output lines of a git command, or None if this folder is not a git repository."""
     try:
-        done = subprocess.run(["git", *args], capture_output=True, text=True, timeout=30)
+        done = subprocess.run(["git", *args], capture_output=True, text=True, check=False, timeout=30)
     except FileNotFoundError:
         return None
     return done.stdout.splitlines() if done.returncode == 0 else None
 
 
 def _is_private(path: str) -> bool:
+    """True for a file that must stay out of git. SUBMISSION.md asks for exactly two exceptions."""
+    if path == "reports/eval.json" or path.startswith("runs/failing/"):
+        return False
     return path == ".env" or path.startswith(PRIVATE_PATHS[1:])
 
 
@@ -80,7 +83,7 @@ def gate_static() -> tuple[list[str], list[str]]:
     failures += [w for w in where if w not in failures] if leaked else []
 
     if shutil.which("ruff"):
-        done = subprocess.run(["ruff", "check", "."], capture_output=True, text=True, timeout=120)
+        done = subprocess.run(["ruff", "check", "."], capture_output=True, text=True, check=False, timeout=120)
         if done.returncode != 0:
             lines = (done.stdout or done.stderr).strip().splitlines()
             failures.append("the linter (ruff check .) reported problems:\n        " + "\n        ".join(lines[:15]))
