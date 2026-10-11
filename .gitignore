@@ -1,11 +1,10 @@
 # .gitignore
 .env
-runs/
-reports/
 __pycache__/
 .venv/
 .phoenix/
 .run/
+.runs/archive/
 Phoenix-Span-Trees/
 scripts/
 eval_runner_instructions.md
